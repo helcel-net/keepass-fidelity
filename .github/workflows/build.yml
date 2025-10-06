@@ -24,7 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-        submodules: true
+        with:
+          submodules: true
       - name: set up secrets
         run: |
           echo "${{ secrets.RELEASE_KEYSTORE }}" > keystore.asc
