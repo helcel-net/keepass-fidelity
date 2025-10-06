@@ -1,37 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="8"
-    android:versionName="1.2c">
-
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.camera" />
-
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <application
         android:icon="@mipmap/ic_launcher_round"
-        android:label="@string/app_name"
+        android:label="${APP_NAME}"
         android:supportsRtl="true">
         <activity
             android:name=".activity.MainActivity"
-            android:exported="true"
-            android:theme="@style/Theme.Fidelity">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <receiver
-            android:name=".pluginSDK.PluginAccessBroadcastReceiver"
-            android:exported="true"
-            tools:ignore="ExportedReceiver">
-            <intent-filter>
-                <action android:name="keepass2android.ACTION_TRIGGER_REQUEST_ACCESS" />
-                <action android:name="keepass2android.ACTION_RECEIVE_ACCESS" />
-                <action android:name="keepass2android.ACTION_REVOKE_ACCESS" />
-            </intent-filter>
-        </receiver>
     </application>
 </manifest>

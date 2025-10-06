@@ -1,167 +1,370 @@
 package net.helcel.fidelity.activity.fragment
 
-import android.content.ActivityNotFoundException
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.widget.ArrayAdapter
-import androidx.core.widget.addTextChangedListener
-import androidx.fragment.app.Fragment
-import com.google.android.material.textfield.TextInputEditText
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.Button
+import androidx.compose.material.Checkbox
+import androidx.compose.material.CheckboxDefaults
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.DropdownMenuItem
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.ExposedDropdownMenuBox
+import androidx.compose.material.Icon
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.Text
+import androidx.compose.material.TextFieldDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import com.google.zxing.FormatException
+import com.kunzisoft.keepass.database.element.Entry
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.helcel.fidelity.R
-import net.helcel.fidelity.databinding.FragCreateEntryBinding
-import net.helcel.fidelity.pluginSDK.Kp2aControl
+import net.helcel.fidelity.activity.ToastHelper
+import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onCameraScan
+import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onFileScan
+import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onSubmit
+import net.helcel.fidelity.activity.fragment.LauncherEventHandlers.onRefresh
+import net.helcel.fidelity.activity.fragment.LauncherEventHandlers.onSave
 import net.helcel.fidelity.tools.BarcodeGenerator.generateBarcode
-import net.helcel.fidelity.tools.CacheManager
-import net.helcel.fidelity.tools.ErrorToaster
-import net.helcel.fidelity.tools.KeepassWrapper
-
-private const val DEBOUNCE_DELAY = 500L
-
-class CreateEntry : Fragment() {
-
-    private val handler = Handler(Looper.getMainLooper())
-    private lateinit var binding: FragCreateEntryBinding
-
-    private val resultLauncherAdd = KeepassWrapper.resultLauncher(this) {
-        val r = KeepassWrapper.entryExtract(it)
-        if (!KeepassWrapper.isProtected(it)) {
-            CacheManager.addFidelity(r)
-        }
-        startViewEntry(r.first, r.second, r.third)
-    }
-
-    private var isValidBarcode: Boolean = false
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        binding = FragCreateEntryBinding.inflate(layoutInflater)
-
-        val formats = resources.getStringArray(R.array.format_array)
-        val arrayAdapter = ArrayAdapter(requireContext(), R.layout.list_item_dropdown, formats)
-        binding.editTextFormat.setAdapter(arrayAdapter)
-
-        val res = KeepassWrapper.bundleExtract(arguments)
-        binding.editTextCode.setText(res.second)
-        binding.editTextFormat.setText(res.third, false)
-
-        binding.editTextCode.addTextChangedListener { changeListener() }
-        binding.editTextFormat.addTextChangedListener { changeListener() }
-        binding.editTextFormat.addTextChangedListener { binding.editTextFormat.error = null }
-        binding.btnSave.setOnClickListener { submit() }
-
-        binding.editTextTitle.onDone { submit() }
-        binding.editTextCode.onDone { submit() }
+import net.helcel.fidelity.tools.FidelityEntry
+import net.helcel.fidelity.tools.FidelityRepository
+import net.helcel.fidelity.tools.FidelityRepository.activeEntry
+import net.helcel.fidelity.tools.FidelityRepository.addEntry
 
 
-        updatePreview()
-        return binding.root
-    }
+@Preview
+@Composable
+fun CreateEntryScreen(navController: NavHostController?) {
+    var entry by remember { activeEntry }
+    var errorTitle by remember { mutableStateOf("") }
+    var errorCode by remember { mutableStateOf("") }
+    var errorFormat by remember { mutableStateOf("") }
 
-    private fun updatePreview() {
-        try {
-            val barcodeBitmap = generateBarcode(
-                binding.editTextCode.text.toString(),
-                binding.editTextFormat.text.toString(),
-                600
-            )
-            binding.imageViewPreview.setImageBitmap(barcodeBitmap)
-            isValidBarcode = true
-        } catch (e: FormatException) {
-            binding.imageViewPreview.setImageBitmap(null)
-            binding.editTextCode.error = "Invalid format"
-        } catch (e: IllegalArgumentException) {
-            binding.imageViewPreview.setImageBitmap(null)
-            binding.editTextCode.error = e.message
-        } catch (e: Exception) {
-            binding.imageViewPreview.setImageBitmap(null)
-            e.printStackTrace()
-        }
-    }
+    var barcodeBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isValidBarcode by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    private fun isValidForm(): Boolean {
-        var valid = true
-        if (binding.editTextFormat.text.isNullOrEmpty()) {
-            valid = false
-            binding.editTextFormat.error = "Format cannot be empty"
-        }
-        if (binding.editTextCode.text.isNullOrEmpty()) {
-            valid = false
-            binding.editTextCode.error = "Code cannot be empty"
-        }
-        if (binding.editTextTitle.text.isNullOrEmpty()) {
-            valid = false
-            binding.editTextTitle.error = "Title cannot be empty"
-        }
-        return valid
-    }
-
-
-    private fun startViewEntry(title: String?, code: String?, fmt: String?) {
-        val viewEntryFragment = ViewEntry()
-        viewEntryFragment.arguments = KeepassWrapper.bundleCreate(title, code, fmt)
-
-        requireActivity().supportFragmentManager.beginTransaction()
-            .replace(R.id.container, viewEntryFragment).commit()
-    }
-
-
-    private fun changeListener() {
+    LaunchedEffect(entry) {
         isValidBarcode = false
-        handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({
-            updatePreview()
-        }, DEBOUNCE_DELAY)
-    }
-
-
-    private fun TextInputEditText.onDone(callback: () -> Unit) {
-        setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                callback.invoke()
-                return@setOnEditorActionListener true
-            }
-            false
+        delay(500)
+        if (entry.code.isEmpty()) return@LaunchedEffect
+        try {
+            val bmp = generateBarcode(entry.code, entry.format, 600)
+            barcodeBitmap = bmp
+            isValidBarcode = true
+            errorCode = ""
+        } catch (_: FormatException) {
+            barcodeBitmap = null
+            errorCode = "Invalid Format"
+        } catch (e: IllegalArgumentException) {
+            barcodeBitmap = null
+            errorCode = if (e.message == "com.google.zxing.FormatException") "Invalid Format"
+            else e.message ?: "Invalid Argument"
+        } catch (e: Exception) {
+            barcodeBitmap = null
+            ToastHelper.show(ctx, e.message ?: e.toString())
         }
     }
 
-    private fun submit() {
-        if (!isValidForm() || !isValidBarcode) {
-            ErrorToaster.formIncomplete(context)
-        } else {
-            val kpEntry = KeepassWrapper.entryCreate(
-                this,
-                binding.editTextTitle.text.toString(),
-                binding.editTextCode.text.toString(),
-                binding.editTextFormat.text.toString(),
-                binding.checkboxProtected.isChecked,
+    if (showDialog) {
+        TreeSelectorDialog(
+            onDismiss = {
+                showDialog = false
+                if(it!=null){
+                    entry = entry.copy(uid = it.nodeId?.id.toString())
+                    if(it is Entry){
+                        entry = entry.copy(title = it.title)
+                    }
+                }
+            }
+        )
+    }
+    val formats = stringArrayResource(R.array.format_array)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp, 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        )
+        {
+            OutlinedTextField(
+                value = entry.title,
+                enabled = entry.uid!=null,
+                onValueChange = {
+                    entry = entry.copy(title = it)
+                    errorTitle = ""
+                },
+                label = { Text(text = "Title") },
+                isError = errorTitle.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                colors = TextFieldDefaults.textFieldColors(
+                    textColor = if(entry.uid!=null)MaterialTheme.colors.onBackground
+                    else MaterialTheme.colors.secondary
+                ),
             )
-            try {
-                resultLauncherAdd.launch(
-                    Kp2aControl.getAddEntryIntent(
-                        kpEntry.first,
-                        kpEntry.second
-                    )
+            if (errorTitle.isNotEmpty()) {
+                Text(errorTitle, color = MaterialTheme.colors.error)
+            }
+
+            OutlinedTextField(
+                value = entry.code,
+                onValueChange = {
+                    entry = entry.copy(code = it)
+                    errorCode = ""
+                },
+                colors = TextFieldDefaults.textFieldColors(
+                    textColor = MaterialTheme.colors.onBackground
+                ),
+                label = { Text("Code") },
+                isError = errorCode.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            if (errorCode.isNotEmpty()) {
+                Text(errorCode, color = MaterialTheme.colors.error)
+            }
+
+            FormatDropdown(
+                formats,
+                entry.format,
+                errorFormat.ifEmpty { null },
+            ) {
+                entry = entry.copy(format = it)
+                errorFormat = ""
+            }
+            if (errorFormat.isNotEmpty()) {
+                Text(errorFormat, color = MaterialTheme.colors.error)
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Checkbox(
+                    checked = entry.protected,
+                    onCheckedChange = {
+                        entry = entry.copy(protected = it)
+                    },
+                    colors = CheckboxDefaults.colors()
                 )
-            } catch (e: ActivityNotFoundException) {
-                ErrorToaster.noKP2AFound(context)
-            } catch (e: Exception) {
-                e.printStackTrace()
+                Text("Protected", color = MaterialTheme.colors.onBackground)
+
+                Spacer(modifier = Modifier.weight(1f))
+                Button(onClick = { onCameraScan(navController!!) }) {
+                    Icon(Icons.Default.Camera, contentDescription = null)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { onFileScan(navController!!) }) {
+                    Icon(Icons.Default.FileOpen, contentDescription = null)
+                }
             }
-            if (!binding.checkboxProtected.isChecked) {
-                val r = KeepassWrapper.entryExtract(kpEntry.first)
-                CacheManager.addFidelity(r)
+            if (barcodeBitmap != null) {
+                Image(
+                    bitmap = barcodeBitmap!!.asImageBitmap(),
+                    contentDescription = "Barcode preview",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            activity?.supportFragmentManager?.popBackStack()
+
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    onSubmitIfValid(
+                        entry,
+                        setErrors = { t, c, f ->
+                            errorTitle = t
+                            errorCode = c
+                            errorFormat = f
+                        },
+                        isValidBarcode
+                    ) {
+                        if (FidelityRepository.getRoot() == null) {
+                            isLoading = true
+                            scope.launch {
+                                onRefresh(ctx, navController!!)
+                                isLoading = false
+                                if(entry.uid!=null){
+                                    addEntry(ctx,entry)
+                                    isLoading = true
+                                    onSave(ctx,navController)
+                                    isLoading = false
+                                    onSubmit(navController)
+                                }else {
+                                    showDialog = true
+                                }
+                            }
+                        } else {
+                            if(entry.uid!=null){
+                                addEntry(ctx,entry)
+                                isLoading = true
+                                scope.launch {
+                                    onSave(ctx, navController!!)
+                                    isLoading = false
+                                    onSubmit(navController)
+                                }
+                            }else {
+                                showDialog = true
+                            }
+                        }
+                    }
+                },
+                enabled = isValidBarcode.and(entry.uid==null || entry.title.isNotEmpty()),
+            ) {
+                Text(if(entry.uid==null)"Select Entry" else "Save", style = MaterialTheme.typography.h6)
+            }
+        }
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colors.background.copy(alpha = 0.75f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
         }
     }
+}
 
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun FormatDropdown(
+    formats: Array<String>,
+    format: String,
+    errorFormat: String?,
+    onFormatChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = format,
+            onValueChange = {},
+            readOnly = true, // important for dropdown
+            label = { Text("Format", color=MaterialTheme.colors.onBackground) },
+            trailingIcon = {
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = "Expand",
+                )
+            },
+            colors = TextFieldDefaults.textFieldColors(
+                textColor = MaterialTheme.colors.onBackground
+            ),
+            isError = errorFormat != null,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            formats.forEach { option ->
+                DropdownMenuItem(
+                    onClick = {
+                        onFormatChange(option)
+                        expanded = false
+                    }
+                ) {
+                    Text(option)
+                }
+            }
+        }
+    }
+}
+
+
+
+private fun onSubmitIfValid(
+    entry: FidelityEntry,
+    setErrors: (String, String, String) -> Unit,
+    isValidBarcode: Boolean,
+    onValid: (FidelityEntry) -> Unit
+) {
+    var tErr = ""
+    var cErr = ""
+    var fErr = ""
+    if (entry.uid!=null && entry.title.isBlank()) tErr = "Title cannot be empty"
+    if (entry.code.isBlank()) cErr = "Code cannot be empty"
+    if (entry.format.isBlank()) fErr = "Format cannot be empty"
+
+    setErrors(tErr, cErr, fErr)
+
+    if (tErr.isEmpty() && cErr.isEmpty() && fErr.isEmpty() && isValidBarcode) {
+        onValid(entry.copy())
+    }
+}
+
+object CreateEntryEventHandler {
+    fun onSubmit(navController: NavHostController){
+        navController.popBackStack()
+        activeEntry.value = activeEntry.value.copy(null,"","","",false)
+    }
+
+    fun onFileScan(navController: NavHostController){
+        navController.navigate("scanFile")
+    }
+    fun onCameraScan(navController: NavHostController){
+        navController.navigate("scanCam")
+    }
 }

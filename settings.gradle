@@ -14,6 +14,11 @@ dependencyResolutionManagement {
         maven { url 'https://jitpack.io' }
     }
 }
+include(":database")
+project(":database").projectDir = file("external/KeePassDX/database")
+
+include(":crypto")
+project(":crypto").projectDir = file("external/KeePassDX/crypto")
 
 rootProject.name = "Fidelity"
 include ':app'

@@ -48,7 +48,7 @@ object BarcodeFormatConverter {
             BarcodeFormat.RSS_14 -> "RSS_14"
             BarcodeFormat.RSS_EXPANDED -> "RSS_EXPANDED"
             BarcodeFormat.UPC_EAN_EXTENSION -> "UPC_EAN"
-            else -> throw Exception("Unsupported Format: $f")
+            //else -> throw Exception("Unsupported Format: $f")
         }
     }
 }

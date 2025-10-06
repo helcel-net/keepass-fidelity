@@ -1,65 +1,62 @@
 package net.helcel.fidelity.activity
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.os.Bundle
-import androidx.activity.addCallback
-import androidx.appcompat.app.AppCompatActivity
-import net.helcel.fidelity.R
-import net.helcel.fidelity.activity.fragment.Launcher
-import net.helcel.fidelity.activity.fragment.ViewEntry
-import net.helcel.fidelity.databinding.ActMainBinding
-import net.helcel.fidelity.pluginSDK.Kp2aControl.getEntryFieldsFromIntent
-import net.helcel.fidelity.tools.CacheManager
-import net.helcel.fidelity.tools.KeepassWrapper.bundleCreate
-import net.helcel.fidelity.tools.KeepassWrapper.entryExtract
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import net.helcel.fidelity.activity.fragment.CreateEntryScreen
+import net.helcel.fidelity.activity.fragment.FileScanner
+import net.helcel.fidelity.activity.fragment.InitialScreen
+import net.helcel.fidelity.activity.fragment.LauncherScreen
+import net.helcel.fidelity.activity.fragment.ScannerScreen
+import net.helcel.fidelity.activity.fragment.ViewEntryScreen
+import net.helcel.fidelity.tools.FidelityRepository.entries
+import net.helcel.fidelity.tools.FidelityRepository.loadEntries
+import net.helcel.fidelity.tools.KeePassStore.hasCredentials
 
-@SuppressLint("SourceLockedOrientationActivity")
-class MainActivity : AppCompatActivity() {
+class MainActivity : FragmentActivity() {
 
-    private lateinit var binding: ActMainBinding
-    private lateinit var sharedPreferences: SharedPreferences
-
-
+    @SuppressLint("SourceLockedOrientationActivity")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sharedPreferences =
-            this.getSharedPreferences(CacheManager.PREF_NAME, Context.MODE_PRIVATE)
-        CacheManager.loadFidelity(sharedPreferences)
+        actionBar?.hide()
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        loadEntries(this.baseContext)
 
-        binding = ActMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        onBackPressedDispatcher.addCallback(this) {
-            if (supportFragmentManager.backStackEntryCount > 0) {
-                supportFragmentManager.popBackStackImmediate()
-                loadLauncher()
-                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            } else {
-                finish()
+        setContent {
+            SysTheme {
+                val navController = rememberNavController()
+                val context = LocalContext.current
+
+                BackHandler {
+                    if (!navController.popBackStack()) finish()
+                }
+                LaunchedEffect(Unit) {
+                    if(!hasCredentials(context)) navController.navigate("init")
+                }
+                NavHost(navController = navController, startDestination = "launcher") {
+                    composable("exit") { finish() }
+                    composable("launcher") { LauncherScreen(navController) }
+                    composable("init"){ InitialScreen (navController)}
+                    composable("scanCam") { ScannerScreen(navController) }
+                    composable("scanFile") { FileScanner(navController) }
+                    composable("edit"){ CreateEntryScreen(navController) }
+                    composable("view/{entryId}") { e ->
+                        val entry = entries.find {
+                            it.uid == (e.arguments?.getString("entryId") ?: "")
+                        }
+                        if (entry == null) return@composable navController.navigate("launcher")
+                        ViewEntryScreen(navController,entry)
+                    }
+                }
             }
         }
-
-        if (intent.extras != null)
-            loadViewEntry()
-        else if (savedInstanceState == null)
-            loadLauncher()
-    }
-
-    private fun loadLauncher() {
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.container, Launcher())
-            .commit()
-    }
-
-    private fun loadViewEntry() {
-        val viewEntry = ViewEntry()
-        val data = getEntryFieldsFromIntent(intent)
-        viewEntry.arguments = bundleCreate(entryExtract(data))
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.container, viewEntry)
-            .commit()
     }
 }
-

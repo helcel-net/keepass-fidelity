@@ -26,9 +26,9 @@ object BarcodeScanner {
         try {
             val result = reader.decode(binaryBitmap)
             cb(result.text, formatToString(result.barcodeFormat))
-        } catch (e: NotFoundException) {
+        } catch (_: NotFoundException) {
             cb(null, null)
-        } catch (e: ReaderException) {
+        } catch (_: ReaderException) {
             cb(null, null)
         }
     }

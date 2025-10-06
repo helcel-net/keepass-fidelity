@@ -6,6 +6,8 @@ import com.google.zxing.MultiFormatWriter
 import com.google.zxing.WriterException
 import com.google.zxing.common.BitMatrix
 import net.helcel.fidelity.tools.BarcodeFormatConverter.stringToFormat
+import androidx.core.graphics.set
+import androidx.core.graphics.createBitmap
 
 object BarcodeGenerator {
 
@@ -31,13 +33,11 @@ object BarcodeGenerator {
 
 
             val bitMatrix: BitMatrix = writer.encode(content, format, width, height)
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(width, height)
 
             for (x in 0 until width) {
                 for (y in 0 until height) {
-                    bitmap.setPixel(
-                        x, y, getPixelColor(bitMatrix, x, y)
-                    )
+                    bitmap[x, y] = getPixelColor(bitMatrix, x, y)
                 }
             }
             return bitmap

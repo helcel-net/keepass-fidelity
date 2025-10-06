@@ -1,0 +1,3 @@
+[submodule "external/KeePassDX"]
+	path = external/KeePassDX
+	url = https://github.com/Kunzisoft/KeePassDX.git
