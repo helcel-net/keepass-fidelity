@@ -122,7 +122,7 @@ dependencies {
 
 //Submodule
     //noinspection NewerVersionAvailable
-    implementation 'joda-time:joda-time:2.13.0'
+    implementation 'joda-time:joda-time:2.14.0'
     implementation 'org.joda:joda-convert:2.2.4'
 
 }
