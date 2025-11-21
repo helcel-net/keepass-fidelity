@@ -100,7 +100,7 @@ dependencies {
 
     implementation "androidx.biometric:biometric:1.2.0-alpha05"
     implementation "androidx.security:security-crypto:1.1.0"
-    implementation "androidx.datastore:datastore-preferences:1.1.7"
+    implementation "androidx.datastore:datastore-preferences:1.2.0"
     implementation "androidx.security:security-crypto:1.1.0"
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs_nio:2.1.5'
