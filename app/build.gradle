@@ -110,7 +110,7 @@ dependencies {
     runtimeOnly 'androidx.camera:camera-camera2:1.5.2'
 
     implementation 'com.google.android.material:material:1.13.0'
-    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0'
     implementation 'com.google.zxing:core:3.5.4'
 
     implementation project(":database")
