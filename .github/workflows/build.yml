@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: true
+          fetch-depth: 0 
       - name: Make script executable
         run: chmod +x ./patch_submodule.sh
       - name: Run patch submodule script
@@ -53,7 +54,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build APK
-        run: ./gradlew assemble
+        run: |
+          VERSION_CODE=$(git rev-list --count HEAD)
+          ./gradlew assemble -PVERSION_CODE=$VERSION_CODE
 
       # - name: Upload APK
       #   uses: actions/upload-artifact@v4
