@@ -3,13 +3,13 @@
   <h1>Keepass Fidelity</h1>
   <img width="100px" src="./metadata/en-US/images/icon.png" alt="Logo">
   
-  <p>A minimalist fidelity/loyalty card plugin</p>
+  <p>A minimalist fidelity/loyalty card app with Keepass Database storage</p>
   
   <img src="https://forthebadge.com/images/badges/built-for-android.svg" alt="Built for Android">
   <img src="https://forthebadge.com/images/badges/built-with-love.svg" alt="Built with love">
   <br>
-    <a href="https://github.com/choelzl/keepass-fidelity/actions/workflows/build.yml">
-    <img src="https://github.com/choelzl/keepass-fidelity/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status">
+    <a href="https://github.com/helcel-net/keepass-fidelity/actions/workflows/build.yml">
+    <img src="https://github.com/helcel-net/keepass-fidelity/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status">
   </a>
 </div>
 
@@ -27,7 +27,7 @@
 
 ## ⭐ Features
 
-- Search entries in [Keepass2Android](https://github.com/PhilippC/keepass2android/)
+- Search entries in Keepass Database
 - Scan & Create entries
 - Recently used history for fast access
 - Protect entries from caching
