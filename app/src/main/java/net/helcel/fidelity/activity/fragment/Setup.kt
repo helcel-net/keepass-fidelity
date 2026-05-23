@@ -53,6 +53,7 @@ import net.helcel.fidelity.activity.ToastHelper
 import net.helcel.fidelity.activity.fragment.SetupEventHandlers.onOpen
 import net.helcel.fidelity.tools.CredentialResult
 import net.helcel.fidelity.tools.FidelityRepository.genCredentials
+import net.helcel.fidelity.tools.FidelityRepository.importDB
 import net.helcel.fidelity.tools.FidelityRepository.start
 import net.helcel.fidelity.tools.KeePassStore.loadCredentials
 import net.helcel.fidelity.tools.KeePassStore.packCredentials
@@ -116,8 +117,8 @@ fun InitialScreen(
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.Main) {
             when(val res = loadCredentials(context)) {
-                CredentialResult.AuthFailed -> null
-                CredentialResult.NoData -> null
+                CredentialResult.AuthFailed -> ToastHelper.show(context, "Unable to Load Credentials")
+                CredentialResult.NoData -> ToastHelper.show(context, "Unable to Load Credentials")
                 is CredentialResult.Success -> {
                     if (res.db != null) dbFile = res.db
                     if (res.key != null) keyFile = res.key
@@ -219,13 +220,17 @@ fun InitialScreen(
                 onClick = {
                     loading = true
                     scope.launch {
-                        if(onOpen(context, dbFile!!, password, keyFile)){
+                        val res = onOpen(context, dbFile!!, password, keyFile)
+                        if(res != null){
+                            ToastHelper.show(context, "Successful... Importing")
+                            withContext(Dispatchers.IO) {
+                                start(context, dbFile!!,genCredentials(context, res))
+                            }
+                            importDB(context)
                             navController!!.popBackStack()
-                            navController.navigate("init")
+                            navController.navigate("launcher")
                         }else{
-                            ToastHelper.show(context, "Auth failed...")
-                            navController!!.popBackStack()
-                            navController.navigate("exit")
+                            ToastHelper.show(context, "Failed... Retry")
                         }
                     }
                 },
@@ -249,7 +254,7 @@ fun InitialScreen(
 }
 
 object SetupEventHandlers {
-    suspend fun onOpen(context: Context, db: Uri, p: String, key: Uri?): Boolean {
+    suspend fun onOpen(context: Context, db: Uri, p: String, key: Uri?): CredentialResult.Success? {
         try {
             val packCred = packCredentials(db, p, key)
             withContext(Dispatchers.IO) {
@@ -261,14 +266,14 @@ object SetupEventHandlers {
                 saveCredentials(context, packCred)
             }
             return when (res) {
-                CredentialResult.AuthFailed, CredentialResult.NoData -> false
-                is CredentialResult.Success -> true
+                CredentialResult.AuthFailed, CredentialResult.NoData -> null
+                is CredentialResult.Success -> res
             }
         } catch (e: Exception) {
             ToastHelper.show(context, e.message.toString())
             println("Err${e.toString()}")
             println(e.message)
-            return false
+            return null
         }
     }
 }

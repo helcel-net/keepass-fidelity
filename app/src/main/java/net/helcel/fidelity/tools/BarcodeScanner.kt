@@ -13,7 +13,6 @@ import com.google.zxing.common.HybridBinarizer
 import net.helcel.fidelity.tools.BarcodeFormatConverter.formatToString
 import java.util.concurrent.Executors
 
-
 @OptIn(ExperimentalGetImage::class)
 object BarcodeScanner {
 
@@ -56,6 +55,4 @@ object BarcodeScanner {
     fun bitmapUseCase(bitmap: Bitmap, cb: (String?, String?) -> Unit) {
         processImage(bitmap, cb)
     }
-
-
 }

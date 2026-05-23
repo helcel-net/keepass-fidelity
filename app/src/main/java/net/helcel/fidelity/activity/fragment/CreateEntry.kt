@@ -62,6 +62,7 @@ import net.helcel.fidelity.tools.FidelityEntry
 import net.helcel.fidelity.tools.FidelityRepository
 import net.helcel.fidelity.tools.FidelityRepository.activeEntry
 import net.helcel.fidelity.tools.FidelityRepository.addEntry
+import kotlin.time.Duration.Companion.milliseconds
 
 
 @Preview
@@ -81,7 +82,7 @@ fun CreateEntryScreen(navController: NavHostController?) {
 
     LaunchedEffect(entry) {
         isValidBarcode = false
-        delay(500)
+        delay(500.milliseconds)
         if (entry.code.isEmpty()) return@LaunchedEffect
         try {
             val bmp = generateBarcode(entry.code, entry.format, 600)
@@ -158,8 +159,9 @@ fun CreateEntryScreen(navController: NavHostController?) {
                 ),
                 label = { Text("Code") },
                 isError = errorCode.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                maxLines = 5,
+                singleLine = false,
+                modifier = Modifier.fillMaxWidth()
             )
             if (errorCode.isNotEmpty()) {
                 Text(errorCode, color = MaterialTheme.colors.error)
@@ -358,7 +360,13 @@ private fun onSubmitIfValid(
 object CreateEntryEventHandler {
     fun onSubmit(navController: NavHostController){
         navController.popBackStack()
-        activeEntry.value = activeEntry.value.copy(null,"","","",false)
+        activeEntry.value = activeEntry.value.copy(
+            uid = null,
+            title = "",
+            code = "",
+            format = "",
+            protected = false
+        )
     }
 
     fun onFileScan(navController: NavHostController){

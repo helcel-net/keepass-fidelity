@@ -59,7 +59,7 @@ object FidelityRepository {
             db.loadData(
                 bitStream, c,
                 { hardwareKey, seed -> retrieveResponseFromChallenge(hardwareKey, seed) },
-                false, binaryDir!!,
+                readOnly=false, allowUserVerification = false,binaryDir!!,
                 { BinaryData.canMemoryBeAllocatedInRAM(ctx, it) },
                 false, null
             )
@@ -84,7 +84,7 @@ object FidelityRepository {
         hardwareKey: HardwareKey? = null
     ): MasterCredential {
         return MasterCredential(
-            cred.password,
+            cred.password.toCharArray(),
             cred.key?.let { ctx.contentResolver.openInputStream(cred.key)?.readBytes() },
             hardwareKey
         )
@@ -103,8 +103,8 @@ object FidelityRepository {
                 val newEntry = FidelityEntry(
                     uid=it.nodeId.id.toString(),
                     title=it.title,
-                    code=code.protectedValue.stringValue,
-                    format=format.protectedValue.stringValue,
+                    code=code.protectedValue.toString(),
+                    format=format.protectedValue.toString(),
                     protected=code.protectedValue.isProtected,
                 )
                 val idx = entries.indexOfFirst { e -> e.uid == newEntry.uid }
@@ -172,7 +172,7 @@ object FidelityRepository {
             putExtraField(
                 Field(
                     FidelityKeepassFields.FIDELITYFORMAT,
-                    ProtectedString(string= entry.format)
+                    ProtectedString(true, entry.format.toCharArray())
                 )
             )
             if(dbParent!=null) title = entry.title

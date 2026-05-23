@@ -113,13 +113,21 @@ suspend fun showBiometricPrompt(activity: FragmentActivity, enc: Boolean): Ciphe
             activity,
             executor,
             object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { cont.resume(result.cryptoObject?.cipher) {} }
-                override fun onAuthenticationError(code: Int, msg: CharSequence) { cont.resume(null) {} }
-                override fun onAuthenticationFailed() { cont.resume(null) {} }
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    cont.resume(result.cryptoObject?.cipher) { _, _, _ -> }
+                }
+                override fun onAuthenticationError(code: Int, msg: CharSequence) {
+                    cont.resume(null) { _, _, _ -> }
+                }
+                override fun onAuthenticationFailed() {
+                    cont.resume(null) { _, _, _ -> }
+                }
             }
         )
         val iv = if(enc) null else prefs[KeePassKeys.IV]?.let { Base64.decode(it, Base64.DEFAULT) }
-        if (!enc && iv == null) { cont.resume(null) {} }
+        if (!enc && iv == null) {
+            cont.resume(null) { _, _, _ -> }
+        }
         val cipher = getCipherForDecryption(getOrCreateBiometricKey(), iv)
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Unlock KeePass")
