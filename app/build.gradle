@@ -23,8 +23,8 @@ android {
 
     defaultConfig {
         applicationId 'net.helcel.fidelity'
-        versionName "1.3"
-        versionCode getCommitCount()
+        versionName "1.3b"
+        versionCode project.hasProperty('VERSION_CODE') ? project.property('VERSION_CODE').toInteger() : 1
         buildConfigField("String", "APP_NAME", "\"Keepass Fidelity\"")
         manifestPlaceholders["APP_NAME"] = "Keepass Fidelity"
         minSdk = 28
