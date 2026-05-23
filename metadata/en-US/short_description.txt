@@ -1,1 +1,1 @@
-Fidelity (Membership/Loyalty) Card plugin for Keepass2Android
+Fidelity (Membership/Loyalty) Card app with Keepass Database Storage
