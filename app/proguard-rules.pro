@@ -3,5 +3,6 @@
 -keepattributes Signature
 
 -keep class org.joda.convert.** { *; }
+-dontwarn org.threeten.bp.**
 # Optional. For using GSON @Expose annotation
 -keepattributes AnnotationDefault,RuntimeVisibleAnnotations
