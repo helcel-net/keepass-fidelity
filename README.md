@@ -4,7 +4,9 @@
   <img width="100px" src="./metadata/en-US/images/icon.png" alt="Logo">
   
   <p>A minimalist fidelity/loyalty card app with Keepass Database storage</p>
-  
+
+  <a href="https://ko-fi.com/I2I615VP5M"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a>
+  <br>
   <img src="https://forthebadge.com/images/badges/built-for-android.svg" alt="Built for Android">
   <img src="https://forthebadge.com/images/badges/built-with-love.svg" alt="Built with love">
   <br>
