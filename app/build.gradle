@@ -20,6 +20,7 @@ plugins {
 android {
     namespace 'net.helcel.fidelity'
     compileSdk = 37
+    ndkVersion "25.2.9519653" //Match this to KeypassDX crypto NDK version
 
     defaultConfig {
         applicationId 'net.helcel.fidelity'
