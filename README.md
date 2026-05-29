@@ -68,7 +68,7 @@ Thanks to all contributors, the developers of our dependencies, and our users.
 ## 📝 License
 
 ```
-Copyright (C) 2024 Helcel
+Copyright (C) 2026 Helcel
 
 Licensed under the Unlicense
 For more information, please refer to <https://unlicense.org>
