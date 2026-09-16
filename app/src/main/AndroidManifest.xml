@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="android.hardware.camera" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+
+    <!-- Keepass2Android plugin mode: make the KP2A activities resolvable from this app -->
+    <queries>
+        <intent>
+            <action android:name="keepass2android.ACTION_QUERY_CREDENTIALS_FOR_OWN_PACKAGE" />
+        </intent>
+        <intent>
+            <action android:name="keepass2android.ACTION_START_WITH_TASK" />
+        </intent>
+        <package android:name="keepass2android.keepass2android" />
+        <package android:name="keepass2android.keepass2android_nonet" />
+    </queries>
 
     <application
         android:icon="@mipmap/ic_launcher_round"
@@ -10,11 +23,23 @@
         android:supportsRtl="true">
         <activity
             android:name=".activity.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".pluginSDK.PluginAccessBroadcastReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="keepass2android.ACTION_TRIGGER_REQUEST_ACCESS" />
+                <action android:name="keepass2android.ACTION_RECEIVE_ACCESS" />
+                <action android:name="keepass2android.ACTION_REVOKE_ACCESS" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

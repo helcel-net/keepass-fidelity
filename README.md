@@ -29,6 +29,9 @@
 
 ## ⭐ Features
 
+- Two storage modes, chosen on first start (switchable later from the launcher):
+  - **Standalone**: opens a `.kdbx` database directly (bundled KeePassDX engine)
+  - **Keepass2Android plugin**: queries and creates entries through the installed Keepass2Android app
 - Search entries in Keepass Database
 - Scan & Create entries
 - Recently used history for fast access
