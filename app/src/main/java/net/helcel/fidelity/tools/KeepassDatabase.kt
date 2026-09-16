@@ -2,12 +2,6 @@ package net.helcel.fidelity.tools
 
 import android.content.Context
 import android.net.Uri
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import kotlinx.serialization.Serializable
-import java.io.ByteArrayInputStream
-import kotlinx.serialization.json.Json
-import androidx.core.content.edit
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.Field
 import com.kunzisoft.keepass.database.element.Group
@@ -17,37 +11,73 @@ import com.kunzisoft.keepass.database.element.node.NodeIdUUID
 import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.hardware.HardwareKey
 import com.kunzisoft.keepass.utils.getBinaryDir
-import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import net.helcel.fidelity.activity.ToastHelper
+import net.helcel.fidelity.tools.FidelityRepository.entries
+import net.helcel.fidelity.tools.FidelityRepository.saveEntries
+import net.helcel.fidelity.tools.KeePassStore.loadCredentials
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.UUID
 
-object FidelityKeepassFields {
-    const val FIDELITYFORMAT = "FidelityFormat"
-    const val FIDELITYCODE = "FidelityCode"
-}
-
-@Serializable
-data class FidelityEntry(
-    val uid: String? = null,
-    val title: String = "",
-    val code: String = "",
-    val format: String = "",
-    val protected: Boolean = false,
-
-    val hidden: Boolean = false,
-    val pinned: Boolean = false,
-    val lastUse: Int = 0,
-)
-
-object FidelityRepository {
+/**
+ * Standalone mode: the KDBX file opened through the bundled KeePassDX engine.
+ *
+ * [unlock] and [save] are the session-level operations the screens use; the rest is the
+ * raw file handling underneath them.
+ */
+object KeepassDatabase {
     private var db: Database = Database()
     private var binaryDir: File? = null
-    val entries = mutableStateListOf<FidelityEntry>()
-    val activeEntry = mutableStateOf(FidelityEntry())
 
+    /** Credentials released by the user for this process, so authentication happens once. */
+    var credentials: CredentialResult.Success? = null
 
     fun getRoot(): Group? {
         return db.rootGroup
+    }
+
+    /** Makes sure [credentials] are available, asking the user to authenticate if needed. */
+    suspend fun ensureCredentials(context: Context): Boolean {
+        if (credentials != null) return true
+        return when (val res = loadCredentials(context)) {
+            is CredentialResult.Success -> {
+                credentials = res
+                true
+            }
+            CredentialResult.AuthFailed, CredentialResult.NoData -> {
+                ToastHelper.show(context, "Unable to Load Credentials")
+                false
+            }
+        }
+    }
+
+    /** Opens the file with [credentials] and imports its cards into [FidelityRepository]. */
+    suspend fun unlock(context: Context): Boolean {
+        val cred = credentials ?: return false
+        val opened = withContext(Dispatchers.IO) {
+            start(context, cred.db, genCredentials(context, cred))
+        }
+        if (!opened) {
+            ToastHelper.show(context, "Unable to open the database")
+            return false
+        }
+        importDB(context)
+        return true
+    }
+
+    /** Writes the database back to its file. */
+    suspend fun save(context: Context): Boolean {
+        val cred = credentials ?: return false
+        val saved = try {
+            withContext(Dispatchers.IO) { end(context, cred.db, genCredentials(context, cred)) }
+        } catch (e: Exception) {
+            println(e)
+            false
+        }
+        if (!saved) ToastHelper.show(context, "Unable to save the database")
+        return saved
     }
 
     fun start(ctx: Context, uri: Uri?, c: MasterCredential): Boolean {
@@ -90,6 +120,7 @@ object FidelityRepository {
         )
     }
 
+    /** Replaces the card list with the cards found in the database, keeping per-device flags. */
     fun importDB(context: Context) {
         val seenID= arrayListOf<String>()
         fun importDBRec(group: Group) {
@@ -119,8 +150,6 @@ object FidelityRepository {
                 } else {
                     entries.add(newEntry)
                 }
-
-
             }
             group.getChildGroups().forEach { importDBRec(it) }
         }
@@ -133,36 +162,19 @@ object FidelityRepository {
         saveEntries(context)
     }
 
-    fun saveEntries(context: Context) {
-        val prefs = context.getSharedPreferences("fidelity_prefs", Context.MODE_PRIVATE)
-        prefs.edit { putString("entries", Json.encodeToString(
-            ListSerializer(FidelityEntry.serializer()),
-            entries
-        )) }
-    }
-
-    fun loadEntries(context: Context) {
-        val prefs = context.getSharedPreferences("fidelity_prefs", Context.MODE_PRIVATE)
-        try {
-            val json = prefs.getString("entries", null) ?: return
-            val list = Json.decodeFromString(
-                ListSerializer(FidelityEntry.serializer()),
-                json
-            )
-
-            entries.clear()
-            entries.addAll(list)
-        }catch(_: Exception){
-            prefs.edit{ putString("entries",Json.encodeToString(
-                ListSerializer(FidelityEntry.serializer()),emptyList()))
-            }
-        }
-    }
-
+    /**
+     * Writes the card into the loaded database. [FidelityEntry.uid] is either the id of an
+     * existing entry, which is updated in place, or the id of the group to create it in.
+     */
     fun addEntry(ctx: Context, entry: FidelityEntry) {
-        val dbEntry = db.getEntryById(NodeIdUUID(UUID.fromString(entry.uid))) ?: db.createEntry()
-        val dbParent = db.getGroupById(NodeIdUUID(UUID.fromString(entry.uid)))
-        dbEntry?.apply {
+        val id = NodeIdUUID(UUID.fromString(entry.uid))
+        val existing = db.getEntryById(id)
+        val dbEntry = existing ?: db.createEntry() ?: return
+        dbEntry.apply {
+            title = entry.title
+            // Keepass2Android lists entries for this app by URL, so cards written here stay
+            // reachable from KP2A mode as well.
+            if (url.isBlank()) url = Kp2a.appUrl(ctx)
             putExtraField(
                 Field(
                     FidelityKeepassFields.FIDELITYCODE,
@@ -175,11 +187,11 @@ object FidelityRepository {
                     ProtectedString(true, entry.format.toCharArray())
                 )
             )
-            if(dbParent!=null) title = entry.title
-            dbParent?.addChildEntry(dbEntry)
         }
+        if (existing != null) db.updateEntry(dbEntry)
+        else db.addEntryTo(dbEntry, db.getGroupById(id) ?: db.rootGroup ?: return)
         entries.removeIf {it.uid == entry.uid}
-        entries.add(entry.copy(uid=dbEntry?.nodeId?.id.toString()))
+        entries.add(entry.copy(uid=dbEntry.nodeId.id.toString()))
         saveEntries(ctx)
     }
 }

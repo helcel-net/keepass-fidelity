@@ -2,9 +2,12 @@ package net.helcel.fidelity.tools
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.widget.Toast
+import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import javax.crypto.Cipher
@@ -16,6 +19,7 @@ import com.kunzisoft.keepass.utils.parseUri
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
+import net.helcel.fidelity.activity.ToastHelper
 import java.security.KeyStore
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -36,6 +40,17 @@ sealed class CredentialResult {
 
 private const val KEY_ALIAS = "keepass_bio_key"
 
+// Android 11+ can unlock a keystore key with the device PIN/pattern/password as well, which
+// keeps standalone mode usable on devices without (enrolled) biometrics. Below that, a
+// CryptoObject can only be released by a biometric.
+private val deviceCredentialSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+private val allowedAuthenticators: Int
+    get() = if (deviceCredentialSupported)
+        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+    else
+        BiometricManager.Authenticators.BIOMETRIC_STRONG
+
 fun getOrCreateBiometricKey(): SecretKey {
     val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     keyStore.getKey(KEY_ALIAS, null)?.let { return it as SecretKey }
@@ -47,7 +62,13 @@ fun getOrCreateBiometricKey(): SecretKey {
     ).apply {
         setBlockModes(KeyProperties.BLOCK_MODE_GCM)
         setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-        setUserAuthenticationRequired(true)
+        if (deviceCredentialSupported)
+            setUserAuthenticationParameters(
+                0,
+                KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+            )
+        else
+            setUserAuthenticationRequired(true)
         setInvalidatedByBiometricEnrollment(true)
     }.build()
 
@@ -108,6 +129,17 @@ object KeePassStore {
 suspend fun showBiometricPrompt(activity: FragmentActivity, enc: Boolean): Cipher? {
     val prefs = activity.securePrefs.data.first()
     return suspendCancellableCoroutine { cont ->
+        val status = BiometricManager.from(activity).canAuthenticate(allowedAuthenticators)
+        if (status != BiometricManager.BIOMETRIC_SUCCESS) {
+            ToastHelper.show(
+                activity,
+                if (deviceCredentialSupported) "Set up a screen lock or fingerprint first"
+                else "Enroll a fingerprint first",
+                Toast.LENGTH_LONG
+            )
+            cont.resume(null) { _, _, _ -> }
+            return@suspendCancellableCoroutine
+        }
         val executor = ContextCompat.getMainExecutor(activity)
         val biometricPrompt = BiometricPrompt(
             activity,
@@ -119,20 +151,22 @@ suspend fun showBiometricPrompt(activity: FragmentActivity, enc: Boolean): Ciphe
                 override fun onAuthenticationError(code: Int, msg: CharSequence) {
                     cont.resume(null) { _, _, _ -> }
                 }
-                override fun onAuthenticationFailed() {
-                    cont.resume(null) { _, _, _ -> }
-                }
+                // onAuthenticationFailed is a retryable miss: the prompt stays open, so the
+                // coroutine must stay suspended until it either succeeds or errors out.
             }
         )
         val iv = if(enc) null else prefs[KeePassKeys.IV]?.let { Base64.decode(it, Base64.DEFAULT) }
         if (!enc && iv == null) {
             cont.resume(null) { _, _, _ -> }
+            return@suspendCancellableCoroutine
         }
         val cipher = getCipherForDecryption(getOrCreateBiometricKey(), iv)
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Unlock KeePass")
             .setSubtitle("Authenticate to access your KeePass database")
-            .setNegativeButtonText("Cancel")
+            .setAllowedAuthenticators(allowedAuthenticators)
+            // A negative button is mandatory without, and forbidden with, device credential.
+            .apply { if (!deviceCredentialSupported) setNegativeButtonText("Cancel") }
             .build()
 
         biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))

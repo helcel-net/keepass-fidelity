@@ -28,6 +28,7 @@ import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,9 +53,10 @@ import kotlinx.coroutines.withContext
 import net.helcel.fidelity.activity.ToastHelper
 import net.helcel.fidelity.activity.fragment.SetupEventHandlers.onOpen
 import net.helcel.fidelity.tools.CredentialResult
-import net.helcel.fidelity.tools.FidelityRepository.genCredentials
-import net.helcel.fidelity.tools.FidelityRepository.importDB
-import net.helcel.fidelity.tools.FidelityRepository.start
+import net.helcel.fidelity.tools.KeepassDatabase
+import net.helcel.fidelity.tools.KeepassDatabase.genCredentials
+import net.helcel.fidelity.tools.KeepassDatabase.importDB
+import net.helcel.fidelity.tools.KeepassDatabase.start
 import net.helcel.fidelity.tools.KeePassStore.loadCredentials
 import net.helcel.fidelity.tools.KeePassStore.packCredentials
 import net.helcel.fidelity.tools.KeePassStore.saveCredentials
@@ -223,9 +225,6 @@ fun InitialScreen(
                         val res = onOpen(context, dbFile!!, password, keyFile)
                         if(res != null){
                             ToastHelper.show(context, "Successful... Importing")
-                            withContext(Dispatchers.IO) {
-                                start(context, dbFile!!,genCredentials(context, res))
-                            }
                             importDB(context)
                             navController!!.popBackStack()
                             navController.navigate("launcher")
@@ -237,6 +236,13 @@ fun InitialScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Continue")
+            }
+            TextButton(
+                enabled = !loading,
+                onClick = { navController!!.navigate("mode") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Use Keepass2Android instead", color = MaterialTheme.colors.secondary)
             }
         }
         Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier
@@ -254,12 +260,16 @@ fun InitialScreen(
 }
 
 object SetupEventHandlers {
+    /** Opens the file with the given credentials, then stores them for later sessions. */
     suspend fun onOpen(context: Context, db: Uri, p: String, key: Uri?): CredentialResult.Success? {
         try {
             val packCred = packCredentials(db, p, key)
-            withContext(Dispatchers.IO) {
-                    start(context, db, genCredentials(context, packCred)
-                    )
+            val opened = withContext(Dispatchers.IO) {
+                start(context, db, genCredentials(context, packCred))
+            }
+            if (!opened) {
+                ToastHelper.show(context, "Unable to open the database: check the password and key file")
+                return null
             }
 
             val res = withContext(Dispatchers.Main) {
@@ -267,7 +277,10 @@ object SetupEventHandlers {
             }
             return when (res) {
                 CredentialResult.AuthFailed, CredentialResult.NoData -> null
-                is CredentialResult.Success -> res
+                is CredentialResult.Success -> {
+                    KeepassDatabase.credentials = res
+                    res
+                }
             }
         } catch (e: Exception) {
             ToastHelper.show(context, e.message.toString())

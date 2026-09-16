@@ -1,5 +1,6 @@
 package net.helcel.fidelity.activity.fragment
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -13,8 +14,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Button
 import androidx.compose.material.Checkbox
 import androidx.compose.material.CheckboxDefaults
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,21 +52,27 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.google.zxing.FormatException
-import com.kunzisoft.keepass.database.element.Entry
+import com.kunzisoft.keepass.database.element.Group
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.helcel.fidelity.R
 import net.helcel.fidelity.activity.ToastHelper
+import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.ensureUnlocked
 import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onCameraScan
 import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onFileScan
+import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onSaveKp2a
+import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onSaveStandalone
 import net.helcel.fidelity.activity.fragment.CreateEntryEventHandler.onSubmit
 import net.helcel.fidelity.activity.fragment.LauncherEventHandlers.onRefresh
 import net.helcel.fidelity.activity.fragment.LauncherEventHandlers.onSave
+import net.helcel.fidelity.tools.AppModeStore
 import net.helcel.fidelity.tools.BarcodeGenerator.generateBarcode
 import net.helcel.fidelity.tools.FidelityEntry
-import net.helcel.fidelity.tools.FidelityRepository
 import net.helcel.fidelity.tools.FidelityRepository.activeEntry
-import net.helcel.fidelity.tools.FidelityRepository.addEntry
+import net.helcel.fidelity.tools.KeepassDatabase
+import net.helcel.fidelity.tools.KeepassDatabase.addEntry
+import net.helcel.fidelity.tools.FidelityRepository.cacheEntry
+import net.helcel.fidelity.tools.Kp2a
 import kotlin.time.Duration.Companion.milliseconds
 
 
@@ -79,6 +90,22 @@ fun CreateEntryScreen(navController: NavHostController?) {
     var isLoading by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val kp2a = AppModeStore.isKp2a
+    // Standalone only: where a new card is created (root unless changed). Existing cards
+    // (uid set) stay where they are.
+    var group by remember { mutableStateOf(KeepassDatabase.getRoot()) }
+    val showGroup = !kp2a && entry.uid == null
+
+    fun pickGroup() {
+        isLoading = true
+        scope.launch {
+            if (ensureUnlocked(ctx, navController!!)) {
+                group = group ?: KeepassDatabase.getRoot()
+                showDialog = true
+            }
+            isLoading = false
+        }
+    }
 
     LaunchedEffect(entry) {
         isValidBarcode = false
@@ -103,17 +130,10 @@ fun CreateEntryScreen(navController: NavHostController?) {
     }
 
     if (showDialog) {
-        TreeSelectorDialog(
-            onDismiss = {
-                showDialog = false
-                if(it!=null){
-                    entry = entry.copy(uid = it.nodeId?.id.toString())
-                    if(it is Entry){
-                        entry = entry.copy(title = it.title)
-                    }
-                }
-            }
-        )
+        TreeSelectorDialog(groupsOnly = true) {
+            showDialog = false
+            if (it is Group) group = it
+        }
     }
     val formats = stringArrayResource(R.array.format_array)
 
@@ -121,16 +141,18 @@ fun CreateEntryScreen(navController: NavHostController?) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colors.background)
+            .imePadding(),
     ) {
         Column(
             modifier = Modifier
-                .padding(16.dp, 32.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp, 32.dp)
+                .padding(bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         )
         {
             OutlinedTextField(
                 value = entry.title,
-                enabled = entry.uid!=null,
                 onValueChange = {
                     entry = entry.copy(title = it)
                     errorTitle = ""
@@ -140,8 +162,7 @@ fun CreateEntryScreen(navController: NavHostController?) {
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = TextFieldDefaults.textFieldColors(
-                    textColor = if(entry.uid!=null)MaterialTheme.colors.onBackground
-                    else MaterialTheme.colors.secondary
+                    textColor = MaterialTheme.colors.onBackground
                 ),
             )
             if (errorTitle.isNotEmpty()) {
@@ -201,6 +222,23 @@ fun CreateEntryScreen(navController: NavHostController?) {
                     Icon(Icons.Default.FileOpen, contentDescription = null)
                 }
             }
+            if (showGroup) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Group: ", color = MaterialTheme.colors.onBackground)
+                    Text(
+                        group?.title ?: "(database root)",
+                        color = MaterialTheme.colors.onBackground,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                    )
+                    Button(onClick = { pickGroup() }) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = "Choose group")
+                    }
+                }
+            }
             if (barcodeBitmap != null) {
                 Image(
                     bitmap = barcodeBitmap!!.asImageBitmap(),
@@ -229,41 +267,22 @@ fun CreateEntryScreen(navController: NavHostController?) {
                             errorCode = c
                             errorFormat = f
                         },
-                        isValidBarcode
+                        isValidBarcode,
                     ) {
-                        if (FidelityRepository.getRoot() == null) {
+                        if (kp2a) {
+                            onSaveKp2a(ctx, navController!!, entry)
+                        } else {
                             isLoading = true
                             scope.launch {
-                                onRefresh(ctx, navController!!)
+                                onSaveStandalone(ctx, navController!!, entry, group)
                                 isLoading = false
-                                if(entry.uid!=null){
-                                    addEntry(ctx,entry)
-                                    isLoading = true
-                                    onSave(ctx,navController)
-                                    isLoading = false
-                                    onSubmit(navController)
-                                }else {
-                                    showDialog = true
-                                }
-                            }
-                        } else {
-                            if(entry.uid!=null){
-                                addEntry(ctx,entry)
-                                isLoading = true
-                                scope.launch {
-                                    onSave(ctx, navController!!)
-                                    isLoading = false
-                                    onSubmit(navController)
-                                }
-                            }else {
-                                showDialog = true
                             }
                         }
                     }
                 },
-                enabled = isValidBarcode.and(entry.uid==null || entry.title.isNotEmpty()),
+                enabled = isValidBarcode && entry.title.isNotEmpty(),
             ) {
-                Text(if(entry.uid==null)"Select Entry" else "Save", style = MaterialTheme.typography.h6)
+                Text("Save", style = MaterialTheme.typography.h6)
             }
         }
 
@@ -346,7 +365,7 @@ private fun onSubmitIfValid(
     var tErr = ""
     var cErr = ""
     var fErr = ""
-    if (entry.uid!=null && entry.title.isBlank()) tErr = "Title cannot be empty"
+    if (entry.title.isBlank()) tErr = "Title cannot be empty"
     if (entry.code.isBlank()) cErr = "Code cannot be empty"
     if (entry.format.isBlank()) fErr = "Format cannot be empty"
 
@@ -358,6 +377,38 @@ private fun onSubmitIfValid(
 }
 
 object CreateEntryEventHandler {
+    /** Standalone: the database must be open before groups can be browsed or cards written. */
+    suspend fun ensureUnlocked(context: Context, navController: NavHostController): Boolean =
+        KeepassDatabase.getRoot() != null || onRefresh(context, navController)
+
+    /** Standalone: updates the existing entry, or creates one in [group] (the root when null). */
+    suspend fun onSaveStandalone(
+        context: Context,
+        navController: NavHostController,
+        entry: FidelityEntry,
+        group: Group?,
+    ) {
+        if (!ensureUnlocked(context, navController)) return
+        val root = KeepassDatabase.getRoot() ?: return
+        val target =
+            if (entry.uid != null) entry
+            else entry.copy(uid = (group ?: root).nodeId.id.toString())
+        addEntry(context, target)
+        if (onSave(context, navController)) onSubmit(navController)
+    }
+
+    /**
+     * KP2A creates the entry in its own task and never reports back, so the card is cached
+     * right away; a later fetch replaces the local uid with KP2A's.
+     */
+    fun onSaveKp2a(context: Context, navController: NavHostController, entry: FidelityEntry) {
+        val kpEntry = entry.copy(uid = Kp2a.localUid(entry.title))
+        if (Kp2a.launchAdd(context, kpEntry)) {
+            cacheEntry(context, kpEntry)
+            onSubmit(navController)
+        }
+    }
+
     fun onSubmit(navController: NavHostController){
         navController.popBackStack()
         activeEntry.value = activeEntry.value.copy(

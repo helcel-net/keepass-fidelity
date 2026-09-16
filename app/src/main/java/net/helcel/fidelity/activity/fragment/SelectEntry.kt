@@ -19,7 +19,9 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,11 +34,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.node.Node
-import net.helcel.fidelity.tools.FidelityRepository
+import net.helcel.fidelity.tools.KeepassDatabase
 
+/**
+ * Browses the loaded database. With [groupsOnly] entries are hidden, so the result is the group
+ * a new card is created in; otherwise an existing entry can be picked to attach the card to.
+ */
 @Preview
 @Composable
-fun TreeSelectorDialog(onDismiss: (Node?) -> Unit = {}) {
+fun TreeSelectorDialog(groupsOnly: Boolean = false, onDismiss: (Node?) -> Unit = {}) {
     Dialog(
         onDismissRequest = {onDismiss(null)},
         content = {
@@ -46,8 +52,8 @@ fun TreeSelectorDialog(onDismiss: (Node?) -> Unit = {}) {
                     RoundedCornerShape(8.dp)
                 )
             ) {
-                var currentRoot by remember { mutableStateOf(FidelityRepository.getRoot()) }
-                var selection by remember { mutableStateOf<Node?>(FidelityRepository.getRoot()) }
+                var currentRoot by remember { mutableStateOf(KeepassDatabase.getRoot()) }
+                var selection by remember { mutableStateOf<Node?>(KeepassDatabase.getRoot()) }
 
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(8.dp)
@@ -76,32 +82,29 @@ fun TreeSelectorDialog(onDismiss: (Node?) -> Unit = {}) {
                     LazyColumn(modifier = Modifier.fillMaxHeight(0.75f)) {
                         items(currentRoot?.getChildGroups() ?: emptyList()) { entry ->
                             val isSel = (entry.nodeId == selection?.nodeId)
+                            val hasChildren = entry.getChildGroups().isNotEmpty() ||
+                                    (!groupsOnly && entry.getChildEntries().isNotEmpty())
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(color = if (isSel) MaterialTheme.colors.primary else MaterialTheme.colors.background)
                                     .clickable {
-                                        if (entry.getChildEntries().isNotEmpty()) {
-                                            currentRoot = entry
-                                            selection = entry
-                                        } else if (entry.getChildGroups().isNotEmpty()) {
-                                            currentRoot = entry
-                                            selection = entry
-                                        } else {
-                                            selection = entry
-                                        }
+                                        selection = entry
+                                        if (hasChildren) currentRoot = entry
                                     }
                                     .padding(8.dp)
                             ) {
-                                if (entry.getChildEntries().isNotEmpty() || entry.getChildGroups()
-                                        .isNotEmpty()
-                                ) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "group",
+                                    tint = if (isSel) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onBackground
+                                )
+                                if (hasChildren)
                                     Icon(
                                         imageVector = Icons.Default.ExpandMore,
                                         contentDescription = null,
                                         tint = if (isSel) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onBackground
                                     )
-                                }
                                 Text(
                                     entry.title,
                                     modifier = Modifier.padding(start = 8.dp),
@@ -109,7 +112,7 @@ fun TreeSelectorDialog(onDismiss: (Node?) -> Unit = {}) {
                                 )
                             }
                         }
-                        items(currentRoot?.getChildEntries() ?: emptyList()) { entry ->
+                        items(if (groupsOnly) emptyList() else currentRoot?.getChildEntries() ?: emptyList()) { entry ->
                             val isSel = (entry.nodeId == selection?.nodeId)
                             Row(
                                 modifier = Modifier
@@ -120,6 +123,11 @@ fun TreeSelectorDialog(onDismiss: (Node?) -> Unit = {}) {
                                     }
                                     .padding(8.dp)
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.CreditCard,
+                                    contentDescription = "entry",
+                                    tint = if (isSel) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onBackground
+                                )
                                 Text(
                                     entry.title,
                                     modifier = Modifier.padding(start = 8.dp),

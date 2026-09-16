@@ -20,6 +20,7 @@ import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,11 +63,19 @@ fun ViewEntryScreen(
         activity?.window?.attributes = activity.window?.attributes?.apply {
             screenBrightness = if (isFull) 1f else BRIGHTNESS_OVERRIDE_NONE
         }
+    }
+    // Generate once per entry (not on every recomposition) and surface zxing's reason,
+    // e.g. "Contents do not pass checksum" for a mistyped EAN.
+    LaunchedEffect(entry) {
         try {
             bitmap = generateBarcode(entry.code, entry.format, 1024)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             bitmap = null
-            Toast.makeText(context, "Invalid barcode format", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "Invalid barcode: " + (e.message ?: "unsupported format"),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
     BackHandler {
