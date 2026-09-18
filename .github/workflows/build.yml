@@ -102,6 +102,6 @@ jobs:
         with:
           serviceAccountJson: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           packageName: net.helcel.fidelity
-          releaseFiles: app/build/outputs/bundle/signedRelease/app-signedRelease.aab
-          track: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'beta' }}
+          releaseFiles: app/build/outputs/bundle/**/*.aab
+          tracks: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'beta' }}
           status: completed
