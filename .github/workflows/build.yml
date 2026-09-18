@@ -93,10 +93,6 @@ jobs:
               echo "true"
             fi
 
-
-      - name: Build Release AAB
-        run: ./gradlew bundleRelease
-
       - name: Upload to Google Play
         uses: r0adkll/upload-google-play@v1
         with:
