@@ -43,12 +43,22 @@
 
 <div style="display: flex; justify-content: center; align-items: center; flex-direction: row;">
     <a href="https://apt.izzysoft.de/fdroid/index/apk/net.helcel.fidelity">
-        <img width="200" height="80" alt="Izzy Download" src=".github/images/izzy.png">
+        <img width="200" height="84" alt="Izzy Download" src=".github/images/izzy.png">
     </a>
     <a href="https://github.com/helcel-net/keepass-fidelity/releases/latest">
         <img width="200" height="84" alt="APK Download" src=".github/images/apk.png">
     </a>
+    <a future-href="https://f-droid.org/en/packages/net.helcel.fidelity">
+        <img width="200" height="84" alt="Fdroid Download" src=".github/images/fdroid.png">
+    </a>
+    <a href="https://play.google.com/store/apps/details?id=net.helcel.fidelity">
+        <img width="200" height="84" alt="GooglePlay Download" src=".github/images/playstore.png">
+    </a>
 </div>
+
+Note:
+ - Fdroid: requested, see https://gitlab.com/fdroid/rfp/-/work_items/4411
+ - PlayStore: alpha test restriction by Google. To access, join https://groups.google.com/g/helcel-android-test
 
 ## ⚙️ Permissions
 
@@ -67,6 +77,13 @@ Keepass-Fidelity is a user-driven project. We welcome any contribution, big or s
 ## ✏️ Acknowledgements
 
 Thanks to all contributors, the developers of our dependencies, and our users.
+
+## Signinig key
+
+```
+net.helcel.fidelity
+D1:96:54:FE:1D:79:16:76:47:D7:A6:12:0E:F6:AB:7D:56:9D:45:AD:FD:41:EF:D6:FA:80:9D:26:52:73:F6
+```
 
 ## 📝 License
 
