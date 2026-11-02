@@ -82,7 +82,7 @@ Thanks to all contributors, the developers of our dependencies, and our users.
 
 ```
 net.helcel.fidelity
-D1:96:54:FE:1D:79:16:76:47:D7:A6:12:0E:F6:AB:7D:56:9D:45:AD:FD:41:EF:D6:FA:80:9D:26:52:73:F6
+D1:96:54:FE:1D:79:16:76:47:D7:A6:12:0E:F6:AB:7D:56:9D:45:AD:FD:41:EF:D6:FA:80:9D:26:52:73:F6:EC
 ```
 
 ## 📝 License
